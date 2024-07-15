@@ -13,6 +13,9 @@ import (
 	"github.com/phpdave11/gofpdf/contrib/gofpdi"
 )
 
+var pathToManual = "./pdf"
+var tempPath = "./tmp"
+
 func (app *Config) HomePage(w http.ResponseWriter, r *http.Request) {
 
 	app.render(w, r, "home.page.gohtml", nil)
@@ -47,7 +50,7 @@ func (app *Config) PostLoginPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//check password
-	validPassword, err := user.PasswordMatches(password)
+	validPassword, err := app.Models.User.PasswordMatches(password)
 
 	if err != nil {
 		app.Session.Put(r.Context(), "error", "Invalid credentials")
@@ -112,7 +115,7 @@ func (app *Config) PostRegisterPage(w http.ResponseWriter, r *http.Request) {
 		IsAdmin:   0,
 	}
 
-	_, err = user.Insert(user)
+	_, err = app.Models.User.Insert(user)
 	if err != nil {
 		app.Session.Put(r.Context(), "error", "Could not create user")
 		app.Errorlog.Println(err)
@@ -161,7 +164,7 @@ func (app *Config) ActivetedAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	u.Active = 1
-	err = u.Update()
+	err = app.Models.User.Update(u)
 	if err != nil {
 		app.Errorlog.Println(err)
 		app.Session.Put(r.Context(), "error", "Could not update account")
@@ -240,7 +243,7 @@ func (app *Config) SubscribeToPlan(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer app.Wait.Done()
 		pdf := app.generateManual(user, plan)
-		err := pdf.OutputFileAndClose(fmt.Sprintf("./tmp/%d_manual.pdf", user.ID))
+		err := pdf.OutputFileAndClose(fmt.Sprintf("%s/%d_manual.pdf", tempPath, user.ID))
 		if err != nil {
 			app.Errorlog.Println(err)
 			app.ErrorChan <- err
@@ -252,7 +255,7 @@ func (app *Config) SubscribeToPlan(w http.ResponseWriter, r *http.Request) {
 			Subject: "Your Manual",
 			Data:    "Your user manual is attacted",
 			AttachmentsMap: map[string]string{
-				"manual.pdf": fmt.Sprintf("./tmp/%d_manual.pdf", user.ID),
+				"manual.pdf": fmt.Sprintf("%s/%d_manual.pdf", tempPath, user.ID),
 			},
 		}
 		app.sendemail(msg)
@@ -294,7 +297,7 @@ func (app *Config) generateManual(user data.User, plan *data.Plan) *gofpdf.Fpdf 
 	importer := gofpdi.NewImporter()
 
 	time.Sleep(5 * time.Second)
-	t := importer.ImportPage(pdf, "./pdf/manual.pdf", 1, "/MediaBox")
+	t := importer.ImportPage(pdf, fmt.Sprintf("%s/manual.pdf", pathToManual), 1, "/MediaBox")
 	pdf.AddPage()
 	importer.UseImportedTemplate(pdf, t, 0, 0, 215.9, 0)
 	pdf.SetX(75)
@@ -308,6 +311,5 @@ func (app *Config) generateManual(user data.User, plan *data.Plan) *gofpdf.Fpdf 
 }
 
 func (app *Config) getInvoice(user data.User, plan *data.Plan) (string, error) {
-	app.Infolog.Println("amount id: ", plan.PlanAmountFormatted)
 	return plan.PlanAmountFormatted, nil
 }
